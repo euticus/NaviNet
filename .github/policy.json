@@ -15,5 +15,5 @@
     "**/*.pem",
     "**/*.key"
   ],
-  "max_additions": 3000
+  "max_additions": 20000
 }

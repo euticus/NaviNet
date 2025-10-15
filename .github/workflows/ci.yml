@@ -18,10 +18,13 @@ jobs:
           components: clippy, rustfmt
       - name: Cargo fmt
         run: cargo fmt --all --check
+        working-directory: chain
       - name: Cargo clippy
         run: cargo clippy --all-targets --all-features -D warnings
+        working-directory: chain
       - name: Cargo test
         run: cargo test --workspace --all-features --quiet
+        working-directory: chain
 
   policy:
     runs-on: ubuntu-latest
