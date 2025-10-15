@@ -1,0 +1,148 @@
+version: 1
+vars:
+  PROJECT_NAME: "navinet"
+  CHAIN_DIR: "chain"
+  RUST_VERSION: "1.79.0"
+  SUBSTRATE_TEMPLATE_URL: "https://github.com/substrate-developer-hub/substrate-node-template"
+
+tasks:
+  - id: T1-bootstrap-substrate
+    title: Bootstrap Substrate node + pallets skeleton
+    prompt: |
+      You are building a new Substrate-based sovereign chain called {{PROJECT_NAME}}.
+
+      Goals for this task:
+      1) Scaffold a Substrate node from the official node template into ./{{CHAIN_DIR}} (workspace with node/, runtime/).
+      2) Add empty FRAME pallets with tests:
+         - pallets/identity (NaviID, just module skeleton + one event + a unit test)
+         - pallets/network-factory (skeleton + event)
+         - pallets/access-gate (skeleton + event)
+         - pallets/service-basket (skeleton + event)
+      3) Wire pallets into runtime/lib.rs (feature-gated if needed) and ensure compile.
+      4) Add top-level README.md with quickstart (Rust toolchain, cargo build, cargo test).
+      5) Add basic rust-toolchain.toml with version {{RUST_VERSION}}.
+
+      Constraints:
+      - Use FRAME vnext consistent with the template you fetch.
+      - All new pallets must have minimal Events and basic unit tests that pass.
+      - Ensure `cargo fmt --check` and `cargo clippy -D warnings` pass.
+
+      Deliverables:
+      - Full code under ./{{CHAIN_DIR}} with workspace Cargo.toml updated.
+      - Update README.md with build/test instructions.
+
+    success:
+      files_required:
+        - "{{CHAIN_DIR}}/node/src/chain_spec.rs"
+        - "{{CHAIN_DIR}}/runtime/src/lib.rs"
+        - "{{CHAIN_DIR}}/pallets/identity/src/lib.rs"
+        - "{{CHAIN_DIR}}/pallets/network-factory/src/lib.rs"
+        - "{{CHAIN_DIR}}/pallets/access-gate/src/lib.rs"
+        - "{{CHAIN_DIR}}/pallets/service-basket/src/lib.rs"
+      commands:
+        - "rustup show"
+        - "cargo fmt --all --check"
+        - "cargo clippy --all-targets --all-features -D warnings"
+        - "cargo test --workspace --all-features --quiet"
+
+  - id: T2-network-factory
+    title: Implement NetworkFactory pallet (create networks + coin)
+    prompt: |
+      Implement the logic for a FRAME pallet `pallet-network-factory` under ./{{CHAIN_DIR}}/pallets/network-factory:
+
+      Purpose:
+      - Instantiate user-owned "Networks" at the press of a button (extrinsic).
+      - Each Network has: NetworkId (u64), owner AccountId, coin_kind (UseNavi | MintAsset), asset_id (Option<AssetId>), treasury AccountId, metadata_uri (Vec<u8>).
+
+      Requirements:
+      1) Storage:
+         - NextNetworkId: u64
+         - Networks: map NetworkId -> { owner, coin_kind, asset_id, treasury, metadata_uri }
+      2) Extrinsic `create_network{ use_navi: bool, metadata_uri: Vec<u8> }`:
+         - Assign new NetworkId.
+         - If use_navi=true: coin_kind=UseNavi, asset_id=None.
+         - Else: create a new Assets pallet class (use FRAME Assets) for the network coin, mint initial supply 0 to treasury, record asset_id.
+         - Treasury = a derived account (e.g., pallet account with NetworkId in sub-account).
+         - Emit `NetworkCreated{ network_id, owner, coin_kind, asset_id }`.
+      3) Events + Errors; weight annotations.
+      4) Unit tests:
+         - Creates two networks with different coin kinds.
+         - Owner recorded, NextNetworkId increments, Assets created when minting.
+      5) Runtime wiring:
+         - Ensure Assets pallet exists and is configured; expose types and constants.
+
+      Deliverables:
+      - Implemented pallet with tests passing.
+      - Runtime updated and compiles with clippy + fmt.
+      - README updated with `create_network` usage.
+
+    success:
+      commands:
+        - "cargo test -p pallet-network-factory --quiet"
+        - "cargo clippy --all-targets --all-features -D warnings"
+        - "cargo fmt --all --check"
+
+  - id: T3-access-gate
+    title: Implement AccessGate (stake-to-unlock + tiered pricing)
+    prompt: |
+      Implement `pallet-access-gate` to let a Network gate resources by staking its coin (or NAVI) with optional pay-per-use top-ups.
+
+      Model:
+      - ResourceId = u64 scoped by NetworkId.
+      - Resource { cid: Vec<u8>, kind: u8, pricing: { base_stake: Balance, duration_blocks: u32, tiers: Vec<Tier>, ppu: Option<Balance> } }
+      - Tier { name: Vec<u8>, stake: Balance, duration_blocks: u32 }
+      - Membership { network_id, who, tier_idx (Option<u32>), expires_at: BlockNumber }
+
+      Requirements:
+      1) Storage:
+         - Resources: double_map (NetworkId, ResourceId) -> Resource
+         - NextResourceId: map NetworkId -> u64
+         - Memberships: double_map (NetworkId, AccountId) -> Membership
+      2) Extrinsics:
+         - register_resource(network_id, cid, kind, pricing)
+         - stake_for_access(network_id, resource_id, tier_idx?) -> locks required amount (NAVI or network Asset)
+         - unstake_if_expired(network_id) (anyone can call)
+         - optional pay_per_use(network_id, resource_id)
+      3) Coin resolution:
+         - Query NetworkFactory to know whether the network uses NAVI or an asset id; lock/unlock accordingly.
+      4) Events:
+         - ResourceRegistered, AccessGranted, AccessExpired, PayPerUsePaid
+      5) Tests:
+         - Register resource; stake base tier; membership recorded; expiry works; PPU increments receipts.
+
+      Make pricing a simple struct; serialization via SCALE; no complex ACL yet (owner-only for register).
+
+    success:
+      commands:
+        - "cargo test -p pallet-access-gate --quiet"
+        - "cargo clippy --all-targets --all-features -D warnings"
+        - "cargo fmt --all --check"
+
+  - id: T4-service-basket
+    title: Implement ServiceBasket (weights + proofs + index)
+    prompt: |
+      Implement `pallet-service-basket` modeling the mix of external services (ID, storage, compute) per Network.
+
+      Model:
+      - Weight = Permill (or FixedU128)
+      - ServiceKey = BoundedVec<u8, ConstU32<32>> (e.g., \"ID\", \"FILE\", \"GOLEM\")
+      - Basket { weights: Vec<(ServiceKey, Weight)>, proofs: BoundedVec<Vec<u8>, _>, index: FixedU128 }
+
+      Requirements:
+      1) Storage:
+         - Baskets: map NetworkId -> Basket
+      2) Extrinsics:
+         - set_weights(network_id, weights: Vec<(ServiceKey, Weight)>) (sum must be <= 1.0)
+         - add_proof(network_id, cid: Vec<u8>)
+         - recompute_index(network_id) (deterministic placeholder: sum(weights_i * 1.0) for now; later use oracle feeds)
+      3) Events emitted on updates; Errors for invalid sums.
+      4) Tests:
+         - Set weights (sum <=1), add proof CID, recompute index updates storage.
+
+      Keep this minimal; we’ll swap in real oracle math later.
+
+    success:
+      commands:
+        - "cargo test -p pallet-service-basket --quiet"
+        - "cargo clippy --all-targets --all-features -D warnings"
+        - "cargo fmt --all --check"
