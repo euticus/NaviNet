@@ -12,18 +12,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - name: Install rust toolchain (stable) + clippy + rustfmt
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install rust toolchain (1.82.0) + clippy + rustfmt
+        uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
       - name: Cargo fmt
         run: cargo fmt --all --check
         working-directory: chain
       - name: Cargo clippy
-        run: cargo clippy --all-targets --all-features -D warnings
+        run: SKIP_WASM_BUILD=1 cargo clippy --all-targets --all-features -D warnings
         working-directory: chain
       - name: Cargo test
-        run: cargo test --workspace --all-features --quiet
+        run: SKIP_WASM_BUILD=1 cargo test --workspace --all-features --quiet
         working-directory: chain
 
   policy:
