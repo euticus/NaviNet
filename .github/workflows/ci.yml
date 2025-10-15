@@ -1,0 +1,47 @@
+name: ci
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Install rust toolchain (stable) + clippy + rustfmt
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+      - name: Cargo fmt
+        run: cargo fmt --all --check
+      - name: Cargo clippy
+        run: cargo clippy --all-targets --all-features -D warnings
+      - name: Cargo test
+        run: cargo test --workspace --all-features --quiet
+
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Policy gate
+        run: |
+          python .github/policy_gate.py "$(jq -r '.pull_request.number' <<< '${{ toJson(github.event) }}')" .github/policy.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  automerge:
+    needs: [rust, policy]
+    if: |
+      github.event.pull_request.user.login == 'augment-bot' &&
+      needs.rust.result == 'success' &&
+      needs.policy.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable auto-merge
+        run: gh pr merge ${{ github.event.pull_request.number }} --auto --squash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
