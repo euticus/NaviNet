@@ -1,0 +1,19 @@
+{
+  "allowlist": [
+    "README.md",
+    ".augment/**",
+    ".github/workflows/**",
+    ".github/autopilot.py",
+    ".github/policy_gate.py",
+    "chain/**"
+  ],
+  "denylist": [
+    "ops/**",
+    "secrets/**",
+    "infra/**",
+    "kubernetes/**",
+    "**/*.pem",
+    "**/*.key"
+  ],
+  "max_additions": 3000
+}
