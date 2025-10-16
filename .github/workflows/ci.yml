@@ -36,11 +36,13 @@ jobs:
           python .github/policy_gate.py "$(jq -r '.pull_request.number' <<< '${{ toJson(github.event) }}')" .github/policy.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          MAX_ADDITIONS: "20000"
 
   automerge:
     needs: [rust, policy]
     if: |
-      github.event.pull_request.user.login == 'augment-bot' &&
+      github.event.pull_request.user.login == 'euticus' &&
       needs.rust.result == 'success' &&
       needs.policy.result == 'success'
     runs-on: ubuntu-latest
