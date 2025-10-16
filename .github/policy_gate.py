@@ -47,12 +47,13 @@ def main():
     files = get_changed_files(pr, repo)
     add = get_additions(pr, repo)
 
-    deny_hits = [f for f in files for d in policy["denylist"] if __import__("fnmatch").fnmatch.fnmatch(f, d)]
+    import fnmatch
+    deny_hits = [f for f in files for d in policy["denylist"] if fnmatch.fnmatch(f, d)]
     if deny_hits:
         print("Denied paths touched:", deny_hits); sys.exit(2)
 
     for f in files:
-        if not any(__import__("fnmatch").fnmatch.fnmatch(f, a) for a in policy["allowlist"]):
+        if not any(fnmatch.fnmatch(f, a) for a in policy["allowlist"]):
             print("Path not allowlisted:", f); sys.exit(3)
 
     # Allow MAX_ADDITIONS env var to override policy.json (default 20000)

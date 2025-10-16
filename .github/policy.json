@@ -5,6 +5,7 @@
     ".github/workflows/**",
     ".github/autopilot.py",
     ".github/policy_gate.py",
+    ".github/policy.json",
     "chain/**"
   ],
   "denylist": [
