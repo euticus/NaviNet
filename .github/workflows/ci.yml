@@ -12,6 +12,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
       - name: Install rust toolchain (1.82.0) + clippy + rustfmt
         uses: dtolnay/rust-toolchain@1.82.0
         with:
@@ -24,7 +26,7 @@ jobs:
         run: SKIP_WASM_BUILD=1 cargo clippy --all-targets --all-features -- -D warnings
         working-directory: chain
       - name: Cargo test
-        run: SKIP_WASM_BUILD=1 cargo test --workspace --all-features || true
+        run: SKIP_WASM_BUILD=1 cargo test --workspace --all-features
         working-directory: chain
 
   policy:
