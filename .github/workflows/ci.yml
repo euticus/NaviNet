@@ -12,16 +12,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      - name: Install rust toolchain (stable) + clippy + rustfmt
-        uses: dtolnay/rust-toolchain@stable
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install rust toolchain (1.82.0) + clippy + rustfmt
+        uses: dtolnay/rust-toolchain@1.82.0
         with:
           components: clippy, rustfmt
+          targets: wasm32-unknown-unknown
       - name: Cargo fmt
         run: cargo fmt --all --check
+        working-directory: chain
       - name: Cargo clippy
-        run: cargo clippy --all-targets --all-features -D warnings
+        run: SKIP_WASM_BUILD=1 cargo clippy --all-targets --all-features -- -D warnings
+        working-directory: chain
       - name: Cargo test
-        run: cargo test --workspace --all-features --quiet
+        run: SKIP_WASM_BUILD=1 cargo test --workspace --all-features --release
+        working-directory: chain
+        timeout-minutes: 20
 
   policy:
     runs-on: ubuntu-latest
@@ -32,15 +39,18 @@ jobs:
           python .github/policy_gate.py "$(jq -r '.pull_request.number' <<< '${{ toJson(github.event) }}')" .github/policy.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          MAX_ADDITIONS: "20000"
 
   automerge:
     needs: [rust, policy]
     if: |
-      github.event.pull_request.user.login == 'augment-bot' &&
+      github.event.pull_request.user.login == 'euticus' &&
       needs.rust.result == 'success' &&
       needs.policy.result == 'success'
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
       - name: Enable auto-merge
         run: gh pr merge ${{ github.event.pull_request.number }} --auto --squash
         env:

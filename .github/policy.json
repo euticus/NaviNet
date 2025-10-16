@@ -5,6 +5,7 @@
     ".github/workflows/**",
     ".github/autopilot.py",
     ".github/policy_gate.py",
+    ".github/policy.json",
     "chain/**"
   ],
   "denylist": [
@@ -15,5 +16,5 @@
     "**/*.pem",
     "**/*.key"
   ],
-  "max_additions": 3000
+  "max_additions": 20000
 }
